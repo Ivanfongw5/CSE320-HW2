@@ -133,6 +133,7 @@ int dtmf_generate(FILE *events_in, FILE *audio_out, uint32_t length) {
 	empty_header.channels = 1;
 
 	if (audio_write_header(stdout, &empty_header) == EOF) {
+		fprintf(stderr,"1");
 		return EOF;
 	}
 
@@ -142,8 +143,13 @@ int dtmf_generate(FILE *events_in, FILE *audio_out, uint32_t length) {
 		while(a != '\t') {
 			if (a == EOF) { break; }
 			if (char_to_int(a) == -1) {
+				fprintf(stderr,"2");
 				return EOF;
 			}
+
+			// if (char_to_int(a) == -1 || a == EOF) {
+			// 	return EOF;
+			// }
 			starting = starting * 10 + char_to_int(a);
 			a = fgetc(events_in);
 		}
@@ -152,39 +158,51 @@ int dtmf_generate(FILE *events_in, FILE *audio_out, uint32_t length) {
 		while(a != '\t') {
 			if (a == EOF) { break; }
 			if (char_to_int(a) == -1) {
+				fprintf(stderr,"3");
 				return EOF;
 			}
+
+			// if (char_to_int(a) == -1 || a == EOF) {
+			// 	return EOF;
+			// }
 			ending = ending * 10 + char_to_int(a);
 			a = fgetc(events_in);
 		}
 
 		a = fgetc(events_in);
-		if (a == EOF) {return EOF; }
+		if (a == EOF) {fprintf(stderr,"4"); return EOF; }
 		row_freq = get_row_frequency(a);
 		col_freq = get_col_frequency(a);
 		if (row_freq == -1 || col_freq == -1) {
+			fprintf(stderr,"5");
 			return EOF;
 		}
 		fgetc(events_in); // Get rid of \n
-		if (a == EOF) {return EOF; }
+		if (a == EOF) {fprintf(stderr,"6");return EOF; }
 	}
 
 	// printf("%d %d\n", starting, ending);
 	// printf("%d %d\n", row_freq, col_freq);
-	FILE* opened_file = 0;
+	FILE* opened_file = NULL;
 	if (noise_file) {
 		opened_file = fopen(noise_file, "r");
 		if (!opened_file) {
 			// printf("Invalid file path\n");
+			fprintf(stderr,"7");
 			return EOF;
 		}
 		if (audio_read_header(opened_file, &empty_header) == EOF) {
 			// The file provided was in an incorrect format
 			// printf("File provided was in incorrect format\n");
+			fprintf(stderr,"8");
 			return EOF;
 		}
+		//fprintf(stderr, "before openedfile: %p\n", (void *)opened_file);
+	} else {
+		fprintf(stderr, "before openedfile: %p\n", (void *)opened_file);
+		return EOF;
 	}
-
+	
 	for (int i = 0; i < length; i++) {
 		double dtmf = 0;
 		if (i >= starting && i < ending) {
@@ -202,43 +220,52 @@ int dtmf_generate(FILE *events_in, FILE *audio_out, uint32_t length) {
 			ending = 0;
 
 			char a = fgetc(events_in);
+			
 			if (a != EOF) {
 				while(a != '\t') {
 					if (a == EOF) { break; }
 					if (char_to_int(a) == -1) {
+						fprintf(stderr,"10");
 						return EOF;
 					}
 					starting = starting * 10 + char_to_int(a);
 					a = fgetc(events_in);
+					if (a == EOF) { fprintf(stderr,"11");return EOF; }
 				}
 
 				a = fgetc(events_in);
+				if (a == EOF) { fprintf(stderr,"12");return EOF; }
 				while(a != '\t') {
 					if (a == EOF) { break; }
 					if (char_to_int(a) == -1) {
+						fprintf(stderr,"13");
 						return EOF;
 					}
 					ending = ending * 10 + char_to_int(a);
 					a = fgetc(events_in);
+					if (a == EOF) { fprintf(stderr,"14");return EOF; }
 				}
 
 				a = fgetc(events_in);
-				if (a == EOF) { return EOF; }
+				if (a == EOF) { fprintf(stderr,"15");return EOF; }
 				row_freq = get_row_frequency(a);
 				col_freq = get_col_frequency(a);
 				if (row_freq == -1 || col_freq == -1) {
+					fprintf(stderr,"16");
 					return EOF;
 				}
 				fgetc(events_in); // Get rid of \n
-				if (a == EOF) { return EOF; }
+				if (a == EOF) { fprintf(stderr,"17");return EOF; }
 			}
 		}
 
+		// fprintf(stderr, "before openedfile: %p\n", (void *)opened_file);
 		if (opened_file) {
 			double w = get_w();
 			int16_t i_real;
 			// printf("\nW: %lf\n", w);
 			int i = audio_read_sample(opened_file, &i_real);
+			if(i == EOF) {fprintf(stderr,"18");return EOF;}
 			if (i != EOF) {
 				// printf("\nNoise: %lf\n", i_real * w);
 				// printf("Value: %lf\n", dtmf * (1 - w));
@@ -246,9 +273,9 @@ int dtmf_generate(FILE *events_in, FILE *audio_out, uint32_t length) {
 				// printf("Final: %d\n", z);
 				dtmf = z;
 				// printf("Final: %d\n", dtmf);
-			}
-		}
-
+			}fprintf(stderr,"TEST 1");
+		}//else {fprintf(stderr,"19");return EOF;        }                                          //third change
+		// fprintf(stderr, "after openedfile: %p\n", (void *)opened_file);
 		int dtmf_int = dtmf;
 		dtmf_generate_helper(dtmf_int, audio_out);
 	}
@@ -465,7 +492,7 @@ int dtmf_detect(FILE *audio_in, FILE *events_out) {
 }
 
 int check_str_equal(char* str1, char* str2) {
-	while (*str1 == *str2) {
+	while (*str1 == *str2 && *str1 != '\0') {                         //first change
 		str1 += 1;
 		str2 += 1;
 	}
@@ -540,10 +567,12 @@ int is_valid_str_to_int(char* str_num) {
  */
 int validargs(int argc, char **argv)
 {
+	argc--;
+	argv++;                                         //second change
 	if (check_str_equal(*(argv), "-h")) {
 		// -h was used
     	global_options = 1;
-    	return 0;
+    	return EXIT_SUCCESS;
 	}
 	if (check_str_equal(*(argv), "-g")) {
 		// -g was used
